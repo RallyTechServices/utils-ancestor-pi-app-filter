@@ -1,0 +1,33 @@
+{
+  "name": "@agile-central-technical-services/utils-ancestor-pi-app-filter",
+  "version": "1.0.0",
+  "description": "A portfolio item ancestor filter plugin for Technical Services apps",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RallyTechServices/utils-ancestor-pi-app-filter.git"
+  },
+  "keywords": [
+    "rally",
+    "agile",
+    "central",
+    "technical",
+    "services",
+    "app",
+    "portfolio",
+    "item",
+    "filter",
+    "ancestor"
+  ],
+  "author": "Tyr Johanson",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/issues"
+  },
+  "homepage": "https://github.com/RallyTechServices/utils-ancestor-pi-app-filter#readme",
+  "dependencies": {
+  }
+}
