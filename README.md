@@ -8,8 +8,8 @@ An app plugin that adds a ancestor portfolio item filter to the app. The plugin 
 * Make the current portfolio item available as a filter relative to a given type.
 (e.g. An Epic ancestor for a HierarchicalRequirement becomes `PortfolioItem.Parent = /portfolioitem/epic/1234`)
 
-![Screenshot](./screenshot1.png)
-![Screenshot](./screenshot2.png)
+![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/screenshot1.png)
+![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/screenshot2.png)
 
 ## Installation
 1. Install using npm (or yarn) `npm install '@agile-central-technical-services/utils-ancestor-pi-app-filter' -D`
