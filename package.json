@@ -1,6 +1,6 @@
 {
   "name": "@agile-central-technical-services/utils-ancestor-pi-app-filter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A portfolio item ancestor filter plugin for Technical Services apps",
   "main": "index.js",
   "scripts": {
@@ -28,6 +28,5 @@
     "url": "https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/issues"
   },
   "homepage": "https://github.com/RallyTechServices/utils-ancestor-pi-app-filter#readme",
-  "dependencies": {
-  }
+  "dependencies": {}
 }
