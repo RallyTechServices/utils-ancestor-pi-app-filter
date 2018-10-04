@@ -4,9 +4,13 @@ An app plugin that adds a ancestor portfolio item filter to the app. The plugin 
 * add an app setting that controls what portfolio item level to filter (e.g. Feature, Epic, etc)
 * If the setting is enabled, search the app for a container with the id of
 `Utils.AncestorPiAppFilter.RENDER_AREA_ID` and add a portfolio item picker.
-* Dispatch a `Utils.AncestorPiAppFilter.PI_SELECTED` when the selected portfolio item is changed.
-* Make the current portfolio item available as a filter relative to a given type.
+* Dispatch a `select` event when the selected portfolio item is changed.
+* Make the current portfolio item available as a Rally.data.wsapi.Filter relative to a given type.
 (e.g. An Epic ancestor for a HierarchicalRequirement becomes `PortfolioItem.Parent = /portfolioitem/epic/1234`)
+* If the given type doesn't have the selected portfolio item type as an ancestor, a null filter
+is returned `(ObjectID = 0)`.
+* To ensure the filter is fully initialized, it returns a promise of a filter that resolves once it's
+the control has an intial value.
 
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/screenshot1.png)
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/screenshot2.png)
@@ -36,26 +40,25 @@ Ext.define("custom-grid-with-deep-export", {
     }],
     
     launch: function() {
-        this.getPlugin('ancestorFilterPlugin')
-            .on(Utils.AncestorPiAppFilter.PI_SELECTED, function() {
-            this._buildStore();
+        // Update the counters when the filters change
+        var ancestorFilterPlugin = this.getPlugin('ancestorFilterPlugin');
+        ancestorFilterPlugin.on('select', function() {
+            this._runApp();
         }, this);
     },
     
-    addGridboard: function() {
+    loadData: function() {
+        ...
         var ancestorFilterPlugin = this.getPlugin('ancestorFilterPlugin');
-        filters = filters.concat(ancestorFilterPlugin.getFiltersForType(this.modelNames[0]));
-        
-        this.gridboard = gridArea.add({
-                xtype: 'rallygridboard',
-                ...
-                gridConfig: {
-                    ...
-                    storeConfig: {
-                        filters: filters,
-                    },
+        var promise = ancestorFilterPlugin.getFilterForType(artifactType).then({
+                scope: this,
+                success: function(ancestorFilter) {
+                    if (ancestorFilter) {
+                        filters = filters.and(ancestorFilter);
+                    }
+                    return this._loadRealData(artifactType, filters || [], id)
                 }
-        });
+            });
     }
 ```
 
