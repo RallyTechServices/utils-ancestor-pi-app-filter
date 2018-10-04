@@ -10,9 +10,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
     portfolioItemTypes: [],
     readyDeferred: null,
 
+    constructor: function(config) {
+        this.callParent(arguments);
+        this.readyDeferred = Ext.create('Deft.Deferred');
+    },
+
     init: function(cmp) {
         this.cmp = cmp;
-        this.readyDeferred = Ext.create('Deft.Deferred');
         this.cmp.getSettingsFields = _.compose(this.getSettingsFields, cmp.getSettingsFields);
         var appDefaults = this.cmp.defaultSettings;
         appDefaults['Utils.AncestorPiAppFilter.piType'] = null;
@@ -32,6 +36,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     initComponent: function() {
+        this.callParent(arguments);
         this.addEvents('ready', 'select');
     },
 
@@ -46,10 +51,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
             // Needed to allow component to auto select '-- No Entry --' instead of lowest PI level
             defaultSelectionPosition: 'first'
         }].concat(fields || []);
-    },
-
-    getReadyPromise: function() {
-        return this.readyDeferred.promise;
     },
 
     // Requires that app settings are available (e.g. from 'beforelaunch')
@@ -107,6 +108,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
                 renderArea.add(this.piSelector);
             }
         }
+        else {
+            // Control not enabled. Ready by definition
+            this.readyDeferred.resolve();
+        }
     },
 
     isAncestorFilterEnabled: function() {
@@ -114,28 +119,44 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return piType && piType != ''
     },
 
+    // Return a proimse that resolves to a filter (or null) after the component has finished
+    // restoring its state and has an initial value.
     getFilterForType: function(type) {
-        var filter;
-        var modelName = type.toLowerCase();
+        return this.readyDeferred.promise.then({
+            scope: this,
+            success: function() {
+                var filter;
+                var modelName = type.toLowerCase();
 
-        if (this.isAncestorFilterEnabled() && this._hasPiAncestor(modelName)) {
-            var selectedRecord = this.piSelector.getRecord();
-            var selectedPi = this.piSelector.getValue()
-            if (selectedRecord && selectedPi != null) {
-                var pisAbove = this._pisAbove(modelName);
                 var selectedPiTypePath = this.cmp.getSetting('Utils.AncestorPiAppFilter.piType');
-                var property = this.propertyPrefix(modelName, selectedPiTypePath, pisAbove);
-                if (property) {
-                    filter = new Rally.data.wsapi.Filter({
-                        property: property,
-                        value: selectedPi
-                    });
+                if (this.isAncestorFilterEnabled()) {
+                    var selectedRecord = this.piSelector.getRecord();
+                    var selectedPi = this.piSelector.getValue()
+                    var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
+                    if (selectedRecord && selectedPi != null && pisAbove != null) {
+                        var property;
+                        property = this.propertyPrefix(modelName, selectedPiTypePath, pisAbove);
+                        if (property) {
+                            filter = new Rally.data.wsapi.Filter({
+                                property: property,
+                                value: selectedPi
+                            });
 
+                        }
+                    }
+                    else if (selectedPi != null) {
+                        // Filter out any items of this type because the ancestor pi filter is
+                        // enabled, but this type doesn't have any pi ancestor types
+                        filter = new Rally.data.wsapi.Filter({
+                            property: 'ObjectID',
+                            value: 0
+                        })
+                    }
                 }
-            }
-        }
 
-        return filter
+                return filter
+            }
+        })
     },
 
     propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
@@ -151,36 +172,48 @@ Ext.define('Utils.AncestorPiAppFilter', {
         }
 
         if (property) {
-            _.forEach(piTypesAbove, function(piType) {
-                if (piType.get('TypePath') == selectedPiTypePath) {
-                    return false;
-                }
-                else {
-                    property = property + '.Parent'
-                }
+            // property already gets us to the lowest pi level above the current type
+            // for each additional level, add a 'Parent' term, except for the last
+            // type in the list which is the currently selected pi type ancestor
+            _.forEach(piTypesAbove.slice(1), function(piType) {
+                property = property + '.Parent';
             }, this);
         }
 
         return property;
     },
 
-    _hasPiAncestor: function(modelName) {
-        return _.contains(['hierarchicalrequirement', 'userstory', 'defect'], modelName) || modelName.startsWith('portfolioitem');
-    },
+    /**
+     * Return a list of portfolio item types AT or below the selected pi type,
+     * that are an ancestor of the given model, or null if there are no pi type
+     * ancestors for the given model.
+     */
+    _piTypeAncestors: function(modelName, selectedPiTypePath) {
+        var result = null;
+        var selectedPiTypeIndex;
+        var modelNamePiTypeIndex;
 
-    _pisAbove: function(modelName) {
-        var result = [];
         if (_.contains(['hierarchicalrequirement', 'userstory', 'defect'], modelName)) {
-            result = this.portfolioItemTypes
+            selectedPiTypeIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
+                return piType.get('TypePath').toLowerCase() === selectedPiTypePath.toLowerCase();
+            });
+            result = this.portfolioItemTypes.slice(0, selectedPiTypeIndex + 1);
         }
         else if (modelName.startsWith('portfolioitem')) {
-            var startIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
-                return piType.get('TypePath') === modelName;
+            modelNamePiTypeIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
+                return piType.get('TypePath').toLowerCase() === modelName;
             });
-            if (startIndex >= 0 && startIndex < this.portfolioItemTypes.length - 1) {
-                result = this.portfolioItemTypes.slice(startIndex + 1);
+            selectedPiTypeIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
+                return piType.get('TypePath').toLowerCase() === selectedPiTypePath.toLowerCase();
+            });
+
+            if (modelNamePiTypeIndex < selectedPiTypeIndex) {
+                // Don't include the current model pi in the list of ancestors
+                // Include the selcted pi type ancestor
+                result = this.portfolioItemTypes.slice(modelNamePiTypeIndex + 1, selectedPiTypeIndex + 1);
             }
         }
+
         return result;
-    },
+    }
 });
