@@ -60,7 +60,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
             var renderArea = this.cmp.down('#' + Utils.AncestorPiAppFilter.RENDER_AREA_ID);
             if (renderArea) {
                 this.piSelector = Ext.create('Rally.ui.combobox.ArtifactSearchComboBox', {
-                    fieldLabel: "Ancestor Portfolio Item",
+                    fieldLabel: "Ancestor " + selectedPiType,
+                    labelAlign: 'top',
                     storeConfig: {
                         models: selectedPiType,
                         autoLoad: true
