@@ -37,6 +37,9 @@ Ext.define("custom-grid-with-deep-export", {
     plugins: [{
         ptype: 'UtilsAncestorPiAppFilter',
         pluginId: 'ancestorFilterPlugin',
+        // Set to false to prevent the '-- None --' selection option if your app can't support
+        // querying by a null ancestor (e.g. Lookback _ItemHierarchy)
+        allowNoEntry: true
     }],
     
     launch: function() {
