@@ -7,6 +7,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
         RENDER_AREA_ID: 'utils-ancestor-pi-app-filter'
     },
 
+    config: {
+        allowNoEntry: true
+    },
+
     portfolioItemTypes: [],
     readyDeferred: null,
 
@@ -72,7 +76,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     valueField: '_ref',
                     allowClear: true,
                     clearValue: null,
-                    allowNoEntry: true,
+                    allowNoEntry: this.allowNoEntry,
                     noEntryValue: '',
                     defaultSelectionPosition: null,
                     listeners: {
