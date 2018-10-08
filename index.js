@@ -13,6 +13,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     portfolioItemTypes: [],
     readyDeferred: null,
+    piTypesDeferred: null,
 
     constructor: function(config) {
         this.callParent(arguments);
@@ -31,7 +32,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             this.addControlCmp();
         }, this);
 
-        Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
+        this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
             scope: this,
             success: function(data) {
                 this.portfolioItemTypes = data;
@@ -124,10 +125,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return piType && piType != ''
     },
 
-    // Return a proimse that resolves to a filter (or null) after the component has finished
-    // restoring its state and has an initial value.
+    // Return a proimse that resolves to a filter (or null) after both:
+    // - the component has finished restoring its state and has an initial value.
+    // - portfolio item types have been loaded
     getFilterForType: function(type) {
-        return this.readyDeferred.promise.then({
+        return Deft.promise.Promise.all([this.readyDeferred, this.piTypesPromise]).then({
             scope: this,
             success: function() {
                 var filter;
@@ -167,10 +169,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
     propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
         var property;
         if (typeName === 'hierarchicalrequirement' || typeName === 'userstory') {
-            property = this.piTypesAbove[0].get('Name');
+            property = piTypesAbove[0].get('Name');
         }
         else if (typeName === 'defect') {
-            property = 'Requirement.' + this.piTypesAbove[0].get('Name');
+            property = 'Requirement.' + piTypesAbove[0].get('Name');
         }
         else if (typeName.startsWith('portfolioitem')) {
             property = 'Parent';
