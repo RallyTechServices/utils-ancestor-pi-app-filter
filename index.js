@@ -208,7 +208,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         }
         else if (modelName.startsWith('portfolioitem')) {
             modelNamePiTypeIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
-                return piType.get('TypePath').toLowerCase() === modelName;
+                return piType.get('TypePath').toLowerCase() === modelName.toLowerCase();
             });
             selectedPiTypeIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
                 return piType.get('TypePath').toLowerCase() === selectedPiTypePath.toLowerCase();
