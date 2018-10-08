@@ -167,10 +167,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
     propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
         var property;
         if (typeName === 'hierarchicalrequirement' || typeName === 'userstory') {
-            property = 'PortfolioItem';
+            property = this.piTypesAbove[0].get('Name');
         }
         else if (typeName === 'defect') {
-            property = 'Requirement.PortfolioItem';
+            property = 'Requirement.' + this.piTypesAbove[0].get('Name');
         }
         else if (typeName.startsWith('portfolioitem')) {
             property = 'Parent';
