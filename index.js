@@ -8,7 +8,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     config: {
-        allowNoEntry: true
+        allowNoEntry: true,
+        settingsConfig: {}
     },
 
     portfolioItemTypes: [],
@@ -17,19 +18,23 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     constructor: function(config) {
         this.callParent(arguments);
-        this.readyDeferred = Ext.create('Deft.Deferred');
     },
 
     init: function(cmp) {
         this.cmp = cmp;
-        this.cmp.getSettingsFields = _.compose(this.getSettingsFields, cmp.getSettingsFields);
+        var cmpGetSettingsFields = this.cmp.getSettingsFields;
+        this.cmp.getSettingsFields = function() {
+            return this.getSettingsFields(cmpGetSettingsFields.apply(cmp, arguments));
+        }.bind(this);
         var appDefaults = this.cmp.defaultSettings;
-        appDefaults['Utils.AncestorPiAppFilter.piType'] = null;
+        appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
         // Wait until app settings are ready before adding the control component
         this.cmp.on('beforelaunch', function() {
-            this.addControlCmp();
+            if (this.isAncestorFilterEnabled()) {
+                this.addControlCmp();
+            }
         }, this);
 
         this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
@@ -46,124 +51,140 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     getSettingsFields: function(fields) {
-        return [{
-            xtype: 'rallyportfolioitemtypecombobox',
-            id: 'Utils.AncestorPiAppFilter.piType',
-            name: 'Utils.AncestorPiAppFilter.piType',
-            fieldLabel: 'Ancestor Portfolio Item Type',
-            valueField: 'TypePath',
-            allowNoEntry: true,
-            // Needed to allow component to auto select '-- No Entry --' instead of lowest PI level
-            defaultSelectionPosition: 'first'
-        }].concat(fields || []);
+        return [_.merge({
+            xtype: 'rallycheckboxfield',
+            id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
+            name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
+            fieldLabel: 'Enable Filtering by Ancestor Portfolio Items',
+        }, this.settingsConfig)].concat(fields || []);
     },
 
     // Requires that app settings are available (e.g. from 'beforelaunch')
     addControlCmp: function() {
         if (this.isAncestorFilterEnabled()) {
-            var selectedPiType = this.cmp.getSetting('Utils.AncestorPiAppFilter.piType');
             var renderArea = this.cmp.down('#' + Utils.AncestorPiAppFilter.RENDER_AREA_ID);
             if (renderArea) {
-                this.piSelector = Ext.create('Rally.ui.combobox.ArtifactSearchComboBox', {
-                    fieldLabel: "Ancestor " + selectedPiType,
-                    labelAlign: 'top',
-                    storeConfig: {
-                        models: selectedPiType,
-                        autoLoad: true
-                    },
-                    stateful: true,
-                    stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piSelector'),
-                    stateEvents: ['select'],
-                    valueField: '_ref',
-                    allowClear: true,
-                    clearValue: null,
-                    allowNoEntry: this.allowNoEntry,
-                    noEntryValue: '',
-                    defaultSelectionPosition: null,
+                this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
+                    xtype: 'rallyportfolioitemtypecombobox',
+                    id: 'Utils.AncestorPiAppFilter.piType',
+                    name: 'Utils.AncestorPiAppFilter.piType',
+                    fieldLabel: 'Ancestor Portfolio Item Type',
+                    valueField: 'TypePath',
+                    allowNoEntry: true,
+                    // Needed to allow component to auto select '-- No Entry --' instead of lowest PI level
+                    defaultSelectionPosition: 'first',
                     listeners: {
                         scope: this,
-                        select: function(cmp, records) {
-                            this.fireEvent('select', this, records);
-                        },
-                        ready: function(cmp, records) {
-                            this.readyDeferred.resolve();
-                            this.fireEvent('ready', this, records);
-                        }
+                        change: this._onPiTypeChange
                     }
                 });
-                // Allow this combobox to save null state (which is default behavior of
-                // stateful mixin, but for some reason was overridden in combobox)
-                Ext.override(this.piSelector, {
-                    saveState: function() {
-                        var me = this,
-                            id = me.stateful && me.getStateId(),
-                            hasListeners = me.hasListeners,
-                            state;
-
-                        if (id) {
-                            state = me.getState() || {}; //pass along for custom interactions
-                            if (!hasListeners.beforestatesave || me.fireEvent('beforestatesave', me, state) !== false) {
-                                Ext.state.Manager.set(id, state);
-                                if (hasListeners.statesave) {
-                                    me.fireEvent('statesave', me, state);
-                                }
-                            }
-                        }
-                    }
-                })
-                renderArea.add(this.piSelector);
+                renderArea.add(this.piTypeSelector);
             }
-        }
-        else {
-            // Control not enabled. Ready by definition
-            this.readyDeferred.resolve();
         }
     },
 
+    _onPiTypeChange: function(piTypeSelector, newValue, oldValue) {
+        if (newValue) {
+            this._removePiSelector();
+            this._addPiSelector(newValue);
+        }
+    },
+
+    _removePiSelector: function() {
+        this.renderArea.down('#Utils.AncestorPiAppFilter.piSelector');
+    },
+
+    _addPiSelector: function(piType) {
+        this.piSelector = Ext.create('Rally.ui.combobox.ArtifactSearchComboBox', {
+            id: 'Utils.AncestorPiAppFilter.piSelector',
+            labelAlign: 'top',
+            storeConfig: {
+                models: piType,
+                autoLoad: true
+            },
+            stateful: true,
+            stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piSelector'),
+            stateEvents: ['select'],
+            valueField: '_ref',
+            allowClear: true,
+            clearValue: null,
+            allowNoEntry: this.allowNoEntry,
+            noEntryValue: '',
+            defaultSelectionPosition: null,
+            listeners: {
+                scope: this,
+                select: function(cmp, records) {
+                    this.fireEvent('select', this, records);
+                },
+                ready: function(cmp, records) {
+                    this.fireEvent('ready', this, records);
+                }
+            }
+        });
+        // Allow this combobox to save null state (which is default behavior of
+        // stateful mixin, but for some reason was overridden in combobox)
+        Ext.override(this.piSelector, {
+            saveState: function() {
+                var me = this,
+                    id = me.stateful && me.getStateId(),
+                    hasListeners = me.hasListeners,
+                    state;
+
+                if (id) {
+                    state = me.getState() || {}; //pass along for custom interactions
+                    if (!hasListeners.beforestatesave || me.fireEvent('beforestatesave', me, state) !== false) {
+                        Ext.state.Manager.set(id, state);
+                        if (hasListeners.statesave) {
+                            me.fireEvent('statesave', me, state);
+                        }
+                    }
+                }
+            }
+        })
+        this.renderArea.add(this.piSelector);
+    },
+
     isAncestorFilterEnabled: function() {
-        var piType = this.cmp.getSetting('Utils.AncestorPiAppFilter.piType');
-        return piType && piType != ''
+        return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
     },
 
     // Return a proimse that resolves to a filter (or null) after both:
     // - the component has finished restoring its state and has an initial value.
     // - portfolio item types have been loaded
     getFilterForType: function(type) {
-        return Deft.promise.Promise.all([this.readyDeferred, this.piTypesPromise]).then({
-            scope: this,
-            success: function() {
-                var filter;
-                var modelName = type.toLowerCase();
+        var filter;
+        var modelName = type.toLowerCase();
 
-                var selectedPiTypePath = this.cmp.getSetting('Utils.AncestorPiAppFilter.piType');
-                if (this.isAncestorFilterEnabled()) {
-                    var selectedRecord = this.piSelector.getRecord();
-                    var selectedPi = this.piSelector.getValue()
-                    var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
-                    if (selectedRecord && selectedPi != null && pisAbove != null) {
-                        var property;
-                        property = this.propertyPrefix(modelName, selectedPiTypePath, pisAbove);
-                        if (property) {
-                            filter = new Rally.data.wsapi.Filter({
-                                property: property,
-                                value: selectedPi
-                            });
-
-                        }
-                    }
-                    else if (selectedPi != null) {
-                        // Filter out any items of this type because the ancestor pi filter is
-                        // enabled, but this type doesn't have any pi ancestor types
-                        filter = new Rally.data.wsapi.Filter({
-                            property: 'ObjectID',
-                            value: 0
-                        })
-                    }
-                }
-
-                return filter
+        var selectedPiTypePath = this.piTypeSelector.getRecord();
+        if (this.isAncestorFilterEnabled() && selectedPiTypePath) {
+            if (selectedPiTypePath) {
+                selectedPiTypePath = selectedPiTypePath.get('TypePath');
             }
-        })
+            var selectedRecord = this.piSelector.getRecord();
+            var selectedPi = this.piSelector.getValue()
+            var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
+            if (selectedRecord && selectedPi != null && pisAbove != null) {
+                var property;
+                property = this.propertyPrefix(modelName, selectedPiTypePath, pisAbove);
+                if (property) {
+                    filter = new Rally.data.wsapi.Filter({
+                        property: property,
+                        value: selectedPi
+                    });
+
+                }
+            }
+            else if (selectedPi != null) {
+                // Filter out any items of this type because the ancestor pi filter is
+                // enabled, but this type doesn't have any pi ancestor types
+                filter = new Rally.data.wsapi.Filter({
+                    property: 'ObjectID',
+                    value: 0
+                })
+            }
+        }
+
+        return filter;
     },
 
     propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
