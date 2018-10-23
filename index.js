@@ -8,11 +8,42 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     config: {
+        /**
+         * @cfg {Boolean}
+         * Set to false to prevent the '-- None --' selection option if your app can't support
+         * querying by a null ancestor (e.g. Lookback _ItemHierarchy)
+         */
         allowNoEntry: true,
+
+        /**
+         * @cfg {Object}
+         * Config applied to the app settings components
+         */
         settingsConfig: {},
+
+        /**
+         * @cfg {String}
+         * Label of the Portfolio Item Type picker
+         */
         label: 'With Ancestor',
+
+        /**
+         * @cfg {Number}
+         * Width of the Portfolio Item Type picker label
+         */
         labelWidth: 125,
+
+        /**
+         * @cfg {Number}
+         * Style of the Portfolio Item Type picker label
+         */
         labelStyle: 'font-size: large',
+
+        /**
+         * @cfg {String}
+         * (Optional) If only one model filtered, set this to hide PI types at or below this level in the type picker
+         */
+        modelName: undefined
     },
 
     portfolioItemTypes: [],
@@ -28,18 +59,18 @@ Ext.define('Utils.AncestorPiAppFilter', {
         this.renderArea = this.cmp.down('#' + Utils.AncestorPiAppFilter.RENDER_AREA_ID);
         var cmpGetSettingsFields = this.cmp.getSettingsFields;
         this.cmp.getSettingsFields = function() {
-            return this.getSettingsFields(cmpGetSettingsFields.apply(cmp, arguments));
+            return this._getSettingsFields(cmpGetSettingsFields.apply(cmp, arguments));
         }.bind(this);
         var appDefaults = this.cmp.defaultSettings;
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
-        if (this.isAncestorFilterEnabled() && this.renderArea) {
+        if (this._isAncestorFilterEnabled() && this.renderArea) {
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
                 success: function(data) {
                     this.portfolioItemTypes = data;
-                    this.addControlCmp();
+                    this._addControlCmp();
                 }
             });
         }
@@ -53,7 +84,48 @@ Ext.define('Utils.AncestorPiAppFilter', {
         this.addEvents('ready', 'select');
     },
 
-    getSettingsFields: function(fields) {
+    // Return a proimse that resolves to a filter (or null) after both:
+    // - the component has finished restoring its state and has an initial value.
+    // - portfolio item types have been loaded
+    getFilterForType: function(type) {
+        var filter;
+
+        if (this._isAncestorFilterEnabled()) {
+            var modelName = type.toLowerCase();
+            var selectedPiTypePath = this.piTypeSelector.getRecord();
+            if (this._isAncestorFilterEnabled() && selectedPiTypePath) {
+                if (selectedPiTypePath) {
+                    selectedPiTypePath = selectedPiTypePath.get('TypePath');
+                }
+                var selectedRecord = this.piSelector.getRecord();
+                var selectedPi = this.piSelector.getValue()
+                var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
+                if (selectedRecord && selectedPi != null && pisAbove != null) {
+                    var property;
+                    property = this._propertyPrefix(modelName, selectedPiTypePath, pisAbove);
+                    if (property) {
+                        filter = new Rally.data.wsapi.Filter({
+                            property: property,
+                            value: selectedPi
+                        });
+
+                    }
+                }
+                else if (selectedPi != null) {
+                    // Filter out any items of this type because the ancestor pi filter is
+                    // enabled, but this type doesn't have any pi ancestor types
+                    filter = new Rally.data.wsapi.Filter({
+                        property: 'ObjectID',
+                        value: 0
+                    })
+                }
+            }
+        }
+
+        return filter;
+    },
+
+    _getSettingsFields: function(fields) {
         return [_.merge({
             xtype: 'rallycheckboxfield',
             id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
@@ -63,7 +135,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     // Requires that app settings are available (e.g. from 'beforelaunch')
-    addControlCmp: function() {
+    _addControlCmp: function() {
         this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
             xtype: 'rallyportfolioitemtypecombobox',
             id: 'Utils.AncestorPiAppFilter.piType',
@@ -76,7 +148,16 @@ Ext.define('Utils.AncestorPiAppFilter', {
             defaultSelectionPosition: 'last',
             listeners: {
                 scope: this,
-                change: this._onPiTypeChange
+                ready: function(combobox) {
+                    // Don't add the change listener until ready. This prevents us
+                    // from adding and removing the pi selector multiple times during
+                    // startup which causes a null ptr exception in that component
+                    combobox.addListener({
+                        scope: this,
+                        change: this._onPiTypeChange
+                    });
+                    this._addPiSelector(combobox.getValue());
+                }
             }
         });
         this.renderArea.add(this.piTypeSelector);
@@ -145,52 +226,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
         this.renderArea.add(this.piSelector);
     },
 
-    isAncestorFilterEnabled: function() {
+    _isAncestorFilterEnabled: function() {
         return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
     },
 
-    // Return a proimse that resolves to a filter (or null) after both:
-    // - the component has finished restoring its state and has an initial value.
-    // - portfolio item types have been loaded
-    getFilterForType: function(type) {
-        var filter;
-
-        if (this.isAncestorFilterEnabled()) {
-            var modelName = type.toLowerCase();
-            var selectedPiTypePath = this.piTypeSelector.getRecord();
-            if (this.isAncestorFilterEnabled() && selectedPiTypePath) {
-                if (selectedPiTypePath) {
-                    selectedPiTypePath = selectedPiTypePath.get('TypePath');
-                }
-                var selectedRecord = this.piSelector.getRecord();
-                var selectedPi = this.piSelector.getValue()
-                var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
-                if (selectedRecord && selectedPi != null && pisAbove != null) {
-                    var property;
-                    property = this.propertyPrefix(modelName, selectedPiTypePath, pisAbove);
-                    if (property) {
-                        filter = new Rally.data.wsapi.Filter({
-                            property: property,
-                            value: selectedPi
-                        });
-
-                    }
-                }
-                else if (selectedPi != null) {
-                    // Filter out any items of this type because the ancestor pi filter is
-                    // enabled, but this type doesn't have any pi ancestor types
-                    filter = new Rally.data.wsapi.Filter({
-                        property: 'ObjectID',
-                        value: 0
-                    })
-                }
-            }
-        }
-
-        return filter;
-    },
-
-    propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
+    _propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
         var property;
         if (typeName === 'hierarchicalrequirement' || typeName === 'userstory') {
             property = piTypesAbove[0].get('Name');

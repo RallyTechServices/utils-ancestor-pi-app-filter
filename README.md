@@ -1,16 +1,17 @@
 # @agile-central-technical-services/utils-ancestor-pi-app-filter
 
 An app plugin that adds a ancestor portfolio item filter to the app. The plugin will:
-* add an app setting that controls what portfolio item level to filter (e.g. Feature, Epic, etc)
+* add an app setting that controls if ancestor filtering is enabled
 * If the setting is enabled, search the app for a container with the id of
-`Utils.AncestorPiAppFilter.RENDER_AREA_ID` and add a portfolio item picker.
+`Utils.AncestorPiAppFilter.RENDER_AREA_ID` and add a portfolio type and item picker.
+* Dispatch a `ready` event when the control is ready for use.
 * Dispatch a `select` event when the selected portfolio item is changed.
 * Make the current portfolio item available as a Rally.data.wsapi.Filter relative to a given type.
 (e.g. An Epic ancestor for a HierarchicalRequirement becomes `PortfolioItem.Parent = /portfolioitem/epic/1234`)
 * If the given type doesn't have the selected portfolio item type as an ancestor, a null filter
 is returned `(ObjectID = 0)`.
-* To ensure the filter is fully initialized, it returns a promise of a filter that resolves once it's
-the control has an intial value.
+* To ensure the filter is fully initialized, the appliation should wait for the `ready` event before
+getting the current ancestor filter.
 
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/screenshot1.png)
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/screenshot2.png)
@@ -31,37 +32,50 @@ Ext.define("custom-grid-with-deep-export", {
     extend: 'Rally.app.App',
     items: [{
         id: Utils.AncestorPiAppFilter.RENDER_AREA_ID,
-        xtype: 'container'
-    }
-    
-    plugins: [{
-        ptype: 'UtilsAncestorPiAppFilter',
-        pluginId: 'ancestorFilterPlugin',
-        // Set to false to prevent the '-- None --' selection option if your app can't support
-        // querying by a null ancestor (e.g. Lookback _ItemHierarchy)
-        allowNoEntry: true
-    }],
+        xtype: 'container',
+        flex: 1,
+        layout: {
+            type: 'hbox',
+            align: 'middle',
+            defaultMargins: '0 10 10 0',
+        }
+    }]
     
     launch: function() {
-        // Update the counters when the filters change
-        var ancestorFilterPlugin = this.getPlugin('ancestorFilterPlugin');
-        ancestorFilterPlugin.on('select', function() {
-            this._runApp();
-        }, this);
+       ...
+        var ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
+            ptype: 'UtilsAncestorPiAppFilter',
+            pluginId: 'ancestorFilterPlugin',
+            // Set to false to prevent the '-- None --' selection option if your app can't support
+            // querying by a null ancestor (e.g. Lookback _ItemHierarchy)
+            allowNoEntry: true,
+            settingsConfig: {
+                labelWidth: 150,
+                margin: 10
+            },
+            listeners: {
+                scope: this,
+                ready: function() {
+                    this._reloadModel().then({
+                        scope: this,
+                        success: this._runApp
+                    });
+                },
+                select: function() {
+                    this._runApp();
+                }
+            }
+        });
+        this.addPlugin(ancestorFilterPlugin);
     },
     
     loadData: function() {
         ...
-        var ancestorFilterPlugin = this.getPlugin('ancestorFilterPlugin');
-        var promise = ancestorFilterPlugin.getFilterForType(artifactType).then({
-                scope: this,
-                success: function(ancestorFilter) {
-                    if (ancestorFilter) {
-                        filters = filters.and(ancestorFilter);
-                    }
-                    return this._loadRealData(artifactType, filters || [], id)
-                }
-            });
+        var ancestorFilter = this.getPlugin('ancestorFilterPlugin').getFilterForType(artifactType);
+            if (ancestorFilter) {
+                filters = filters.and(ancestorFilter);
+            }
+        ...
     }
 ```
 
