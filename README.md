@@ -55,14 +55,14 @@ Ext.define("custom-grid-with-deep-export", {
             },
             listeners: {
                 scope: this,
-                ready: function() {
-                    this._reloadModel().then({
+                ready: function(plugin) {
+                    plugin.addListener({
                         scope: this,
-                        success: this._runApp
+                        select: function() {
+                            this.loadData();
+                        }
                     });
-                },
-                select: function() {
-                    this._runApp();
+                    this.loadData();
                 }
             }
         });

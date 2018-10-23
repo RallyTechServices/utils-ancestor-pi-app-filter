@@ -38,12 +38,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * Style of the Portfolio Item Type picker label
          */
         labelStyle: 'font-size: large',
-
-        /**
-         * @cfg {String}
-         * (Optional) If only one model filtered, set this to hide PI types at or below this level in the type picker
-         */
-        modelName: undefined
     },
 
     portfolioItemTypes: [],
@@ -66,6 +60,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         this.cmp.setDefaultSettings(appDefaults);
 
         if (this._isAncestorFilterEnabled() && this.renderArea) {
+            // Need to get pi types sorted by ordinal lowest to highest for the filter logic to work
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
                 success: function(data) {
@@ -92,17 +87,15 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
         if (this._isAncestorFilterEnabled()) {
             var modelName = type.toLowerCase();
-            var selectedPiTypePath = this.piTypeSelector.getRecord();
-            if (this._isAncestorFilterEnabled() && selectedPiTypePath) {
-                if (selectedPiTypePath) {
-                    selectedPiTypePath = selectedPiTypePath.get('TypePath');
-                }
+            var selectedPiType = this.piTypeSelector.getRecord();
+            if (selectedPiType) {
+                var selectedPiTypePath = selectedPiType.get('TypePath');
                 var selectedRecord = this.piSelector.getRecord();
                 var selectedPi = this.piSelector.getValue()
                 var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
                 if (selectedRecord && selectedPi != null && pisAbove != null) {
                     var property;
-                    property = this._propertyPrefix(modelName, selectedPiTypePath, pisAbove);
+                    property = this._propertyPrefix(modelName, pisAbove);
                     if (property) {
                         filter = new Rally.data.wsapi.Filter({
                             property: property,
@@ -149,6 +142,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
             listeners: {
                 scope: this,
                 ready: function(combobox) {
+                    // Unfortunately we cannot use the combobox store of PI types for our filter
+                    // logic because it is sorted by ordinal from highest to lowest so that the
+                    // picker options have a an order familiar to the user.
+
                     // Don't add the change listener until ready. This prevents us
                     // from adding and removing the pi selector multiple times during
                     // startup which causes a null ptr exception in that component
@@ -230,7 +227,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
     },
 
-    _propertyPrefix: function(typeName, selectedPiTypePath, piTypesAbove) {
+    _propertyPrefix: function(typeName, piTypesAbove) {
         var property;
         if (typeName === 'hierarchicalrequirement' || typeName === 'userstory') {
             property = piTypesAbove[0].get('Name');
