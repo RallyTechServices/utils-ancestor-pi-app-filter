@@ -1,6 +1,9 @@
 Ext.define('Utils.AncestorPiAppFilter', {
     alias: 'plugin.UtilsAncestorPiAppFilter',
-    mixins: ['Ext.AbstractPlugin'],
+    mixins: [
+        'Ext.AbstractPlugin',
+        'Rally.Messageable'
+    ],
     extend: 'Ext.Component',
 
     statics: {
@@ -43,9 +46,16 @@ Ext.define('Utils.AncestorPiAppFilter', {
     portfolioItemTypes: [],
     readyDeferred: null,
     piTypesDeferred: null,
+    isSubscriber: false,
 
     constructor: function(config) {
         this.callParent(arguments);
+        this.subscriberEventName = Rally.getApp().getAppId() + this.$className;
+        this.subscribe(this, this.subscriberEventName, function(data) {
+            this.isSubscriber = true;
+            this.publishedValue = data;
+            this._onSelect();
+        }, this);
     },
 
     init: function(cmp) {
@@ -59,18 +69,23 @@ Ext.define('Utils.AncestorPiAppFilter', {
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
-        if (this._isAncestorFilterEnabled() && this.renderArea) {
+        if (this._isSubscriber() || (this._isAncestorFilterEnabled() && this.renderArea)) {
             // Need to get pi types sorted by ordinal lowest to highest for the filter logic to work
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
                 success: function(data) {
                     this.portfolioItemTypes = data;
-                    this._addControlCmp();
+                    if (this._isAncestorFilterEnabled() && this.renderArea) {
+                        this._addControlCmp();
+                    }
+                    else {
+                        this._setReady();
+                    }
                 }
             });
         }
         else {
-            this.fireEvent('ready', this);
+            this._setReady();
         }
     },
 
@@ -85,13 +100,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
     getFilterForType: function(type) {
         var filter;
 
-        if (this._isAncestorFilterEnabled()) {
+        if (this._isSubscriber() || this._isAncestorFilterEnabled()) {
             var modelName = type.toLowerCase();
-            var selectedPiType = this.piTypeSelector.getRecord();
-            if (selectedPiType) {
-                var selectedPiTypePath = selectedPiType.get('TypePath');
-                var selectedRecord = this.piSelector.getRecord();
-                var selectedPi = this.piSelector.getValue()
+            var currentValues = this.getValue();
+            if (currentValues.piTypePath) {
+                var selectedPiTypePath = currentValues.piTypePath
+                var selectedRecord = currentValues.isPiSelected;
+                var selectedPi = currentValues.pi;
                 var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
                 if (selectedRecord && selectedPi != null && pisAbove != null) {
                     var property;
@@ -118,8 +133,48 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return filter;
     },
 
+    getValue: function() {
+        var result = {};
+        if (this.isSubscriber) {
+            result = this.publishedValue;
+        }
+        else {
+            var selectedPiType = this.piTypeSelector.getRecord();
+            if (selectedPiType) {
+                var selectedPiTypePath = selectedPiType.get('TypePath');
+                var selectedRecord = this.piSelector.getRecord();
+                var selectedPi = this.piSelector.getValue();
+                result = {
+                    piTypePath: selectedPiTypePath,
+                    isPiSelected: !!selectedRecord,
+                    pi: selectedPi
+                };
+            }
+        }
+        return result;
+    },
+
+    _setReady: function() {
+        this.ready = true;
+        if (this._isSubscriber()) {
+            this.publish('registerChangeSubscriber', this.subscriberEventName);
+        }
+        this.fireEvent('ready', this);
+    },
+
+    _onSelect: function() {
+        if (this.ready) {
+            this.fireEvent('select', this);
+        }
+    },
+
     _getSettingsFields: function(fields) {
-        return [_.merge({
+        return [{
+            xtype: 'rallycheckboxfield',
+            id: 'Utils.AncestorPiAppFilter.subscriber',
+            name: 'Utils.AncestorPiAppFilter.subscriber',
+            fieldLabel: 'Listener for Ancestor Portfolio Items',
+        }, _.merge({
             xtype: 'rallycheckboxfield',
             id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
             name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
@@ -193,10 +248,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
             listeners: {
                 scope: this,
                 select: function(cmp, records) {
-                    this.fireEvent('select', this, records);
+                    this._onSelect();
                 },
                 ready: function(cmp, records) {
-                    this.fireEvent('ready', this, records);
+                    this._setReady();
                 }
             }
         });
@@ -225,6 +280,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     _isAncestorFilterEnabled: function() {
         return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
+    },
+
+    _isSubscriber: function() {
+        return this.cmp.getSetting('Utils.AncestorPiAppFilter.subscriber');
     },
 
     _propertyPrefix: function(typeName, piTypesAbove) {
