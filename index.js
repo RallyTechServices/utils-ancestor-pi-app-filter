@@ -13,6 +13,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
     config: {
         /**
          * @cfg {Boolean}
+         * Set to true to indicate that this component is a publisher of events
+         * to other apps using this plugin
+         */
+        publisher: false,
+
+        /**
+         * @cfg {Boolean}
          * Set to false to prevent the '-- None --' selection option if your app can't support
          * querying by a null ancestor (e.g. Lookback _ItemHierarchy)
          */
@@ -47,15 +54,42 @@ Ext.define('Utils.AncestorPiAppFilter', {
     readyDeferred: null,
     piTypesDeferred: null,
     isSubscriber: false,
+    changeSubscribers: [],
 
     constructor: function(config) {
         this.callParent(arguments);
-        this.subscriberEventName = Rally.getApp().getAppId() + this.$className;
-        this.subscribe(this, this.subscriberEventName, function(data) {
-            this.isSubscriber = true;
-            this.publishedValue = data;
-            this._onSelect();
-        }, this);
+        if (this.publisher) {
+            this.subscribe(this, 'registerChangeSubscriber', function(subscriberName) {
+                // Register new unique subscribers
+                if (!_.contains(this.changeSubscribers, subscriberName)) {
+                    this.changeSubscribers.push(subscriberName)
+                }
+                this.publish(subscriberName, this.getValue());
+            }, this);
+            // Ask any existing subscribers to re-register
+            this.publish('reRegisterChangeSubscriber');
+        }
+        else {
+            this.subscriberEventName = Rally.getApp().getAppId() + this.$className;
+            // Subscribe to a channel dedicated to this app
+            this.subscribe(this, this.subscriberEventName, function(data) {
+                if (this.intervalTimer) {
+                    clearInterval(this.intervalTimer);
+                    delete this.intervalTimer;
+                }
+                this.isSubscriber = true;
+                this.publishedValue = data;
+                this._onSelect();
+            }, this);
+            // Attempt to register with a publisher (if one exists)
+            this.publish('registerChangeSubscriber', this.subscriberEventName);
+            this.intervalTimer = setInterval(function() {
+                this.publish('registerChangeSubscriber', this.subscriberEventName);
+            }.bind(this), 500);
+            this.subscribe(this, 'reRegisterChangeSubscriber', function() {
+                this.publish('registerChangeSubscriber', this.subscriberEventName);
+            }, this);
+        }
     },
 
     init: function(cmp) {
@@ -69,18 +103,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
-        if (this._isSubscriber() || (this._isAncestorFilterEnabled() && this.renderArea)) {
+        if (this._isAncestorFilterEnabled() && this.renderArea) {
             // Need to get pi types sorted by ordinal lowest to highest for the filter logic to work
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
                 success: function(data) {
                     this.portfolioItemTypes = data;
-                    if (this._isAncestorFilterEnabled() && this.renderArea) {
-                        this._addControlCmp();
-                    }
-                    else {
-                        this._setReady();
-                    }
+                    this._addControlCmp();
                 }
             });
         }
@@ -100,7 +129,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     getFilterForType: function(type) {
         var filter;
 
-        if (this._isSubscriber() || this._isAncestorFilterEnabled()) {
+        if (this._isAncestorFilterEnabled()) {
             var modelName = type.toLowerCase();
             var currentValues = this.getValue();
             if (currentValues.piTypePath) {
@@ -135,7 +164,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     getValue: function() {
         var result = {};
-        if (this.isSubscriber) {
+        if (this._isSubscriber()) {
             result = this.publishedValue;
         }
         else {
@@ -154,11 +183,15 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return result;
     },
 
+    notifySubscribers: function() {
+        var data = this.getValue();
+        _.each(this.changeSubscribers, function(subscriberName) {
+            this.publish(subscriberName, data);
+        }, this);
+    },
+
     _setReady: function() {
         this.ready = true;
-        if (this._isSubscriber()) {
-            this.publish('registerChangeSubscriber', this.subscriberEventName);
-        }
         this.fireEvent('ready', this);
     },
 
@@ -169,17 +202,20 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _getSettingsFields: function(fields) {
-        return [{
-            xtype: 'rallycheckboxfield',
-            id: 'Utils.AncestorPiAppFilter.subscriber',
-            name: 'Utils.AncestorPiAppFilter.subscriber',
-            fieldLabel: 'Listener for Ancestor Portfolio Items',
-        }, _.merge({
-            xtype: 'rallycheckboxfield',
-            id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
-            name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
-            fieldLabel: 'Enable Filtering by Ancestor Portfolio Items',
-        }, this.settingsConfig)].concat(fields || []);
+        return [
+            /*{
+                        xtype: 'rallycheckboxfield',
+                        id: 'Utils.AncestorPiAppFilter.subscriber',
+                        name: 'Utils.AncestorPiAppFilter.subscriber',
+                        fieldLabel: 'Listener for Ancestor Portfolio Items',
+                    },*/
+            _.merge({
+                xtype: 'rallycheckboxfield',
+                id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
+                name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
+                fieldLabel: 'Enable Filtering by Ancestor Portfolio Items',
+            }, this.settingsConfig)
+        ].concat(fields || []);
     },
 
     // Requires that app settings are available (e.g. from 'beforelaunch')
@@ -283,7 +319,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _isSubscriber: function() {
-        return this.cmp.getSetting('Utils.AncestorPiAppFilter.subscriber');
+        return this.isSubscriber;
+        //return this.cmp.getSetting('Utils.AncestorPiAppFilter.subscriber');
     },
 
     _propertyPrefix: function(typeName, piTypesAbove) {
