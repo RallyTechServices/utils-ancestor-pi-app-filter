@@ -47,7 +47,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {Number}
          * Style of the Portfolio Item Type picker label
          */
-        labelStyle: 'font-size: large',
+        labelStyle: 'font-size: medium',
     },
 
     portfolioItemTypes: [],
@@ -166,6 +166,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return filter;
     },
 
+    getIgnoreProjectScope: function() {
+        var currentValue = this.getValue();
+        return currentValue.ignoreProjectScope;
+    },
+
     getValue: function() {
         var result = {};
         if (this._isSubscriber()) {
@@ -177,12 +182,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
                 var selectedPiTypePath = selectedPiType.get('TypePath');
                 var selectedRecord = this.piSelector.getRecord();
                 var selectedPi = this.piSelector.getValue();
-                result = {
+                _.merge(result, {
                     piTypePath: selectedPiTypePath,
                     isPiSelected: !!selectedRecord,
                     pi: selectedPi
-                };
+                });
             }
+            result.ignoreProjectScope = this.ignoreScopeControl.getValue();
         }
         return result;
     },
@@ -219,31 +225,65 @@ Ext.define('Utils.AncestorPiAppFilter', {
     // Requires that app settings are available (e.g. from 'beforelaunch')
     _addControlCmp: function() {
         if (this.renderArea) {
-            this.publisherIndicator = Ext.create('Ext.Component', {
-                id: 'publisherIndicator',
-                html: '<span class="icon-bullhorn icon-large"></span>',
-                hidden: !this.publisher
+            /*
+            this.ignoreScopeControl = Ext.create('Rally.ui.CheckboxField', {
+                xtype: 'rallycheckboxfield',
+                id: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
+                name: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
+                hidden: this._isSubscriber(),
+                labelWidth: 140,
+                labelStyle: this.labelStyle,
+                fieldLabel: 'and owned by',
+                listeners: {
+                    scope: this,
+                    change: function(cmp, newValue) {
+                        this._onSelect();
+                    },
+                }
             });
-            this.renderArea.add(this.publisherIndicator);
-            Ext.tip.QuickTipManager.register({
-                target: 'publisherIndicator',
-                //title: 'Publisher Indicator',
-                text: 'This app broadcasts filter settings to any enabled ancestor filtered apps (indicated with <span class="icon-link icon-large"></span>)',
-                showDelay: 50,
-                border: true
-            });
-            this.subscriberIndicator = Ext.create('Ext.Component', {
-                id: 'subscriberIndicator',
-                html: '<span class="icon-link icon-large"></span>',
-                hidden: !this._isSubscriber()
-            });
-            this.renderArea.add(this.subscriberIndicator);
-            Ext.tip.QuickTipManager.register({
-                target: 'subscriberIndicator',
-                //title: 'Subscriber Indicator',
-                text: 'This app listens for filter settings from any enabled ancestor filter broadcast app (indicated with <span class="icon-bullhorn icon-large"></span>)',
-                showDelay: 50,
-                border: true
+            */
+            /*
+            this.ignoreScopeControl = Ext.create('Ext.form.RadioGroup', {
+                id: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
+                name: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
+                hidden: this._isSubscriber(),
+                labelWidth: 140,
+                labelStyle: this.labelStyle,
+                fieldLabel: 'and owned by',
+                listeners: {
+                    scope: this,
+                    change: function(cmp, newValue) {
+                        this._onSelect();
+                    },
+                },
+                allowBlank: false,
+                items: [{
+                    xtype: 'rallyradiofield',
+                    fieldLabel: 'current project(s)',
+                    name: 'ignoreProjectScope',
+                    value: true,
+                    inputValue: false
+                }, {
+                    xtype: 'rallyradiofield',
+                    fieldLabel: 'any project',
+                    name: 'ignoreProjectScope',
+                    value: false,
+                    inputValue: false
+                }]
+            });*/
+            this.ignoreScopeControl = Ext.create('Rally.ui.combobox.ComboBox', {
+                displayField: 'text',
+                valueField: 'value',
+                storeConfig: {
+                    fields: ['text', 'value'],
+                    data: [{
+                        text: "Current Project(s)",
+                        value: false
+                    }, {
+                        text: "Any Project",
+                        value: true
+                    }]
+                }
             });
             this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
                 xtype: 'rallyportfolioitemtypecombobox',
@@ -274,7 +314,58 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     }
                 }
             });
-            this.renderArea.add(this.piTypeSelector);
+            this.publisherIndicator = Ext.create('Ext.Component', {
+                id: 'publisherIndicator',
+                html: '<span class="icon-bullhorn icon-large"></span>',
+                hidden: !this.publisher
+            });
+            this.subscriberIndicator = Ext.create('Ext.Component', {
+                id: 'subscriberIndicator',
+                html: '<span class="icon-link icon-large"></span>',
+                hidden: !this._isSubscriber()
+            });
+            this.piSelectorArea = Ext.create('Ext.container.Container', {
+                xtype: 'container',
+                layout: {
+                    type: 'hbox',
+                    align: 'middle'
+                },
+                id: 'piSelectorArea'
+            });
+
+            Ext.tip.QuickTipManager.register({
+                target: 'publisherIndicator',
+                //title: 'Publisher Indicator',
+                text: 'This app broadcasts filter settings to any enabled ancestor filtered apps (indicated with <span class="icon-link icon-large"></span>)',
+                showDelay: 50,
+                border: true
+            });
+
+            Ext.tip.QuickTipManager.register({
+                target: 'subscriberIndicator',
+                //title: 'Subscriber Indicator',
+                text: 'This app listens for filter settings from any enabled ancestor filter broadcast app (indicated with <span class="icon-bullhorn icon-large"></span>)',
+                showDelay: 50,
+                border: true
+            });
+
+            this.renderArea.add({
+                xtype: 'panel',
+                width: this.renderArea.getWidth(),
+                layout: {
+                    type: 'hbox',
+                    align: 'middle',
+                    defaultMargins: '0 10 10 0',
+                },
+                border: false,
+                items: [,
+                    this.publisherIndicator,
+                    this.subscriberIndicator,
+                    this.piTypeSelector,
+                    this.piSelectorArea,
+                    this.ignoreScopeControl
+                ]
+            });
         }
         else {
             this._setReady();
@@ -291,6 +382,9 @@ Ext.define('Utils.AncestorPiAppFilter', {
         if (this.piSelector) {
             this.piSelector.hide();
         }
+        if (this.ignoreScopeControl) {
+            this.ignoreScopeControl.hide();
+        }
     },
 
     _onPiTypeChange: function(piTypeSelector, newValue, oldValue) {
@@ -302,7 +396,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     _removePiSelector: function() {
         if (this.piSelector) {
-            this.renderArea.remove(this.piSelector);
+            this.piSelectorArea.remove(this.piSelector);
         }
     },
 
@@ -313,7 +407,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
             labelAlign: 'top',
             storeConfig: {
                 models: piType,
-                autoLoad: true
+                autoLoad: true,
+                context: {
+                    project: null
+                }
             },
             stateful: true,
             stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piSelector'),
@@ -353,8 +450,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
                     }
                 }
             }
-        })
-        this.renderArea.add(this.piSelector);
+        });
+        this.piSelectorArea.add(this.piSelector);
     },
 
     _isAncestorFilterEnabled: function() {
