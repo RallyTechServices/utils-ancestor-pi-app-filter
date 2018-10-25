@@ -274,6 +274,9 @@ Ext.define('Utils.AncestorPiAppFilter', {
             this.ignoreScopeControl = Ext.create('Rally.ui.combobox.ComboBox', {
                 displayField: 'text',
                 valueField: 'value',
+                labelStyle: this.labelStyle,
+                labelWidth: 140,
+                fieldLabel: 'and owned by',
                 storeConfig: {
                     fields: ['text', 'value'],
                     data: [{
@@ -283,7 +286,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         text: "Any Project",
                         value: true
                     }]
-                }
+                },
+                listeners: {
+                    scope: this,
+                    change: function(cmp, newValue) {
+                        this._onSelect();
+                    },
+                },
             });
             this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
                 xtype: 'rallyportfolioitemtypecombobox',
