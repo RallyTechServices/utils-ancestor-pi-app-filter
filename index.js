@@ -1,6 +1,9 @@
 Ext.define('Utils.AncestorPiAppFilter', {
     alias: 'plugin.UtilsAncestorPiAppFilter',
-    mixins: ['Ext.AbstractPlugin'],
+    mixins: [
+        'Ext.AbstractPlugin',
+        'Rally.Messageable'
+    ],
     extend: 'Ext.Component',
 
     statics: {
@@ -8,6 +11,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     config: {
+        /**
+         * @cfg {Boolean}
+         * Set to true to indicate that this component is a publisher of events
+         * to other apps using this plugin
+         */
+        publisher: false,
+
         /**
          * @cfg {Boolean}
          * Set to false to prevent the '-- None --' selection option if your app can't support
@@ -43,9 +53,47 @@ Ext.define('Utils.AncestorPiAppFilter', {
     portfolioItemTypes: [],
     readyDeferred: null,
     piTypesDeferred: null,
+    isSubscriber: false,
+    changeSubscribers: [],
 
     constructor: function(config) {
         this.callParent(arguments);
+        Ext.tip.QuickTipManager.init();
+        if (this.publisher) {
+            this.subscribe(this, 'registerChangeSubscriber', function(subscriberName) {
+                // Register new unique subscribers
+                if (!_.contains(this.changeSubscribers, subscriberName)) {
+                    this.changeSubscribers.push(subscriberName)
+                }
+                this.publish(subscriberName, this.getValue());
+            }, this);
+            // Ask any existing subscribers to re-register
+            this.publish('reRegisterChangeSubscriber');
+        }
+        else {
+            this.subscriberEventName = Rally.getApp().getAppId() + this.$className;
+            // Subscribe to a channel dedicated to this app
+            this.subscribe(this, this.subscriberEventName, function(data) {
+                if (this.intervalTimer) {
+                    clearInterval(this.intervalTimer);
+                    delete this.intervalTimer;
+                }
+                if (!this.isSubscriber) {
+                    this.isSubscriber = true;
+                    this._hideControlCmp();
+                }
+                this.publishedValue = data;
+                this._onSelect();
+            }, this);
+            // Attempt to register with a publisher (if one exists)
+            this.publish('registerChangeSubscriber', this.subscriberEventName);
+            this.intervalTimer = setInterval(function() {
+                this.publish('registerChangeSubscriber', this.subscriberEventName);
+            }.bind(this), 500);
+            this.subscribe(this, 'reRegisterChangeSubscriber', function() {
+                this.publish('registerChangeSubscriber', this.subscriberEventName);
+            }, this);
+        }
     },
 
     init: function(cmp) {
@@ -59,7 +107,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
-        if (this._isAncestorFilterEnabled() && this.renderArea) {
+        if (this._isAncestorFilterEnabled()) {
             // Need to get pi types sorted by ordinal lowest to highest for the filter logic to work
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
@@ -70,7 +118,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             });
         }
         else {
-            this.fireEvent('ready', this);
+            this._setReady();
         }
     },
 
@@ -87,11 +135,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
         if (this._isAncestorFilterEnabled()) {
             var modelName = type.toLowerCase();
-            var selectedPiType = this.piTypeSelector.getRecord();
-            if (selectedPiType) {
-                var selectedPiTypePath = selectedPiType.get('TypePath');
-                var selectedRecord = this.piSelector.getRecord();
-                var selectedPi = this.piSelector.getValue()
+            var currentValues = this.getValue();
+            if (currentValues.piTypePath) {
+                var selectedPiTypePath = currentValues.piTypePath
+                var selectedRecord = currentValues.isPiSelected;
+                var selectedPi = currentValues.pi;
                 var pisAbove = this._piTypeAncestors(modelName, selectedPiTypePath);
                 if (selectedRecord && selectedPi != null && pisAbove != null) {
                     var property;
@@ -118,46 +166,131 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return filter;
     },
 
+    getValue: function() {
+        var result = {};
+        if (this._isSubscriber()) {
+            result = this.publishedValue;
+        }
+        else {
+            var selectedPiType = this.piTypeSelector.getRecord();
+            if (selectedPiType) {
+                var selectedPiTypePath = selectedPiType.get('TypePath');
+                var selectedRecord = this.piSelector.getRecord();
+                var selectedPi = this.piSelector.getValue();
+                result = {
+                    piTypePath: selectedPiTypePath,
+                    isPiSelected: !!selectedRecord,
+                    pi: selectedPi
+                };
+            }
+        }
+        return result;
+    },
+
+    notifySubscribers: function() {
+        var data = this.getValue();
+        _.each(this.changeSubscribers, function(subscriberName) {
+            this.publish(subscriberName, data);
+        }, this);
+    },
+
+    _setReady: function() {
+        this.ready = true;
+        this.fireEvent('ready', this);
+    },
+
+    _onSelect: function() {
+        if (this.ready) {
+            this.fireEvent('select', this);
+        }
+    },
+
     _getSettingsFields: function(fields) {
-        return [_.merge({
-            xtype: 'rallycheckboxfield',
-            id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
-            name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
-            fieldLabel: 'Enable Filtering by Ancestor Portfolio Items',
-        }, this.settingsConfig)].concat(fields || []);
+        return [
+            _.merge({
+                xtype: 'rallycheckboxfield',
+                id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
+                name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter',
+                fieldLabel: 'Enable Filtering by Ancestor Portfolio Items',
+            }, this.settingsConfig)
+        ].concat(fields || []);
     },
 
     // Requires that app settings are available (e.g. from 'beforelaunch')
     _addControlCmp: function() {
-        this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
-            xtype: 'rallyportfolioitemtypecombobox',
-            id: 'Utils.AncestorPiAppFilter.piType',
-            name: 'Utils.AncestorPiAppFilter.piType',
-            fieldLabel: this.label,
-            labelWidth: this.labelWidth,
-            labelStyle: this.labelStyle,
-            valueField: 'TypePath',
-            allowNoEntry: false,
-            defaultSelectionPosition: 'last',
-            listeners: {
-                scope: this,
-                ready: function(combobox) {
-                    // Unfortunately we cannot use the combobox store of PI types for our filter
-                    // logic because it is sorted by ordinal from highest to lowest so that the
-                    // picker options have a an order familiar to the user.
+        if (this.renderArea) {
+            this.publisherIndicator = Ext.create('Ext.Component', {
+                id: 'publisherIndicator',
+                html: '<span class="icon-bullhorn icon-large"></span>',
+                hidden: !this.publisher
+            });
+            this.renderArea.add(this.publisherIndicator);
+            Ext.tip.QuickTipManager.register({
+                target: 'publisherIndicator',
+                //title: 'Publisher Indicator',
+                text: 'This app broadcasts filter settings to any enabled ancestor filtered apps (indicated with <span class="icon-link icon-large"></span>)',
+                showDelay: 50,
+                border: true
+            });
+            this.subscriberIndicator = Ext.create('Ext.Component', {
+                id: 'subscriberIndicator',
+                html: '<span class="icon-link icon-large"></span>',
+                hidden: !this._isSubscriber()
+            });
+            this.renderArea.add(this.subscriberIndicator);
+            Ext.tip.QuickTipManager.register({
+                target: 'subscriberIndicator',
+                //title: 'Subscriber Indicator',
+                text: 'This app listens for filter settings from any enabled ancestor filter broadcast app (indicated with <span class="icon-bullhorn icon-large"></span>)',
+                showDelay: 50,
+                border: true
+            });
+            this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
+                xtype: 'rallyportfolioitemtypecombobox',
+                id: 'Utils.AncestorPiAppFilter.piType',
+                name: 'Utils.AncestorPiAppFilter.piType',
+                hidden: this._isSubscriber(),
+                fieldLabel: this.label,
+                labelWidth: this.labelWidth,
+                labelStyle: this.labelStyle,
+                valueField: 'TypePath',
+                allowNoEntry: false,
+                defaultSelectionPosition: 'last',
+                listeners: {
+                    scope: this,
+                    ready: function(combobox) {
+                        // Unfortunately we cannot use the combobox store of PI types for our filter
+                        // logic because it is sorted by ordinal from highest to lowest so that the
+                        // picker options have a an order familiar to the user.
 
-                    // Don't add the change listener until ready. This prevents us
-                    // from adding and removing the pi selector multiple times during
-                    // startup which causes a null ptr exception in that component
-                    combobox.addListener({
-                        scope: this,
-                        change: this._onPiTypeChange
-                    });
-                    this._addPiSelector(combobox.getValue());
+                        // Don't add the change listener until ready. This prevents us
+                        // from adding and removing the pi selector multiple times during
+                        // startup which causes a null ptr exception in that component
+                        combobox.addListener({
+                            scope: this,
+                            change: this._onPiTypeChange
+                        });
+                        this._addPiSelector(combobox.getValue());
+                    }
                 }
-            }
-        });
-        this.renderArea.add(this.piTypeSelector);
+            });
+            this.renderArea.add(this.piTypeSelector);
+        }
+        else {
+            this._setReady();
+        }
+    },
+
+    _hideControlCmp: function() {
+        if (this.subscriberIndicator && this._isSubscriber()) {
+            this.subscriberIndicator.show()
+        }
+        if (this.piTypeSelector) {
+            this.piTypeSelector.hide();
+        }
+        if (this.piSelector) {
+            this.piSelector.hide();
+        }
     },
 
     _onPiTypeChange: function(piTypeSelector, newValue, oldValue) {
@@ -176,6 +309,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     _addPiSelector: function(piType) {
         this.piSelector = Ext.create('Rally.ui.combobox.ArtifactSearchComboBox', {
             id: 'Utils.AncestorPiAppFilter.piSelector',
+            hidden: this._isSubscriber(),
             labelAlign: 'top',
             storeConfig: {
                 models: piType,
@@ -193,10 +327,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
             listeners: {
                 scope: this,
                 select: function(cmp, records) {
-                    this.fireEvent('select', this, records);
+                    this._onSelect();
                 },
                 ready: function(cmp, records) {
-                    this.fireEvent('ready', this, records);
+                    this._setReady();
                 }
             }
         });
@@ -225,6 +359,11 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     _isAncestorFilterEnabled: function() {
         return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
+    },
+
+    _isSubscriber: function() {
+        return this.isSubscriber;
+        //return this.cmp.getSetting('Utils.AncestorPiAppFilter.subscriber');
     },
 
     _propertyPrefix: function(typeName, piTypesAbove) {
