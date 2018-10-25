@@ -21,23 +21,25 @@ is returned `(ObjectID = 0)`.
 * To ensure the filter is fully initialized, the appliation should wait for the `ready` event before
 getting the current ancestor filter.
 
-The added filter controls.
+## Screenshots
+### The added filter controls.
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/app-filter.png)
 
-The added filter settings.
+### The added filter settings.
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/app-filter-settings.png)
 
-When configured as a filter publisher.
+### When configured as a filter publisher.
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/app-filter-publisher.png)
 
-When enabled and on a page containing a publisher app.
+### When enabled and on a page containing a publisher app.
 ![Screenshot](https://github.com/RallyTechServices/utils-ancestor-pi-app-filter/raw/master/app-filter-listener.png)
 
-Publisher examples:
+## Examples
+### Publisher examples:
 * [pi-ancestor-filter-broadcaster](https://github.com/RallyTechServices/pi-ancestor-filter-broadcaster)
 for an example.
 
-Listener examples:
+### Listener examples:
 * [CFD-by-implied-state](https://github.com/RallyTechServices/CFD-by-implied-state/releases/latest)
 * [custom-board](https://github.com/RallyTechServices/custom-board/releases/latest)
 * [custom-grid-with-deep-export](https://github.com/RallyTechServices/custom-grid-with-deep-export/releases/latest)
