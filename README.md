@@ -1,6 +1,6 @@
 # @agile-central-technical-services/utils-ancestor-pi-app-filter
 
-An app plugin that adds an ancestor portfolio item filter to the app, or, if placed on a page containing
+An app plugin that adds an ancestor portfolio item filter and project scoping to the app, or, if placed on a page containing
 a version of this plugin configured as a `publisher`, will listen for an ancestor filter from the publisher
 app.
 
@@ -8,7 +8,8 @@ The plugin will:
 * add an app setting that controls if ancestor filtering is enabled
 * If the setting is enabled
    * search the app for a container with the id of
-`Utils.AncestorPiAppFilter.RENDER_AREA_ID` and add a portfolio type and item picker.
+`Utils.AncestorPiAppFilter.RENDER_AREA_ID` (or a specified id) and add a portfolio type picker, a portfolio item picker
+and a project scoping control.
    * listen for events from any apps using this plugin as a publisher
    * if a publisher is detected, the local portfolio type and picker will be hidden and
 filter values from the publisher used instead.
@@ -16,6 +17,7 @@ filter values from the publisher used instead.
 * Dispatch a `select` event when the selected portfolio item is changed (or a publisher has changed selections)
 * Make the current portfolio item available as a Rally.data.wsapi.Filter relative to a given type.
 (e.g. An Epic ancestor for a HierarchicalRequirement becomes `PortfolioItem.Parent = /portfolioitem/epic/1234`)
+* Make the current project scope setting available as a function call.
 * If the given type doesn't have the selected portfolio item type as an ancestor, a null filter
 is returned `(ObjectID = 0)`.
 * To ensure the filter is fully initialized, the appliation should wait for the `ready` event before
@@ -123,7 +125,7 @@ Ext.define("custom-grid-with-deep-export", {
     
     launch: function() {
        ...
-        var ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
+        this.ancestorFilterPlugin = Ext.create('Utils.AncestorPiAppFilter', {
             ptype: 'UtilsAncestorPiAppFilter',
             pluginId: 'ancestorFilterPlugin',
             // Set to false to prevent the '-- None --' selection option if your app can't support
@@ -146,15 +148,22 @@ Ext.define("custom-grid-with-deep-export", {
                 }
             }
         });
-        this.addPlugin(ancestorFilterPlugin);
+        this.addPlugin(this.ancestorFilterPlugin);
     },
     
     loadData: function() {
         ...
-        var ancestorFilter = this.getPlugin('ancestorFilterPlugin').getFilterForType(artifactType);
-            if (ancestorFilter) {
-                filters = filters.and(ancestorFilter);
-            }
+        // Get current ancestor portfolio item filter
+        var ancestorFilter = this.ancestorFilterPlugin.getFilterForType(artifactType);
+        if (ancestorFilter) {
+            filters = filters.and(ancestorFilter);
+        }
+        
+        // Get current project scoping
+        var dataContext = this.getContext.getDataContext();
+        if ( this.ancestorFilterPlugin.getIgnoreProjectScope() ) {
+            dataContext.project = null
+        }
         ...
     }
 ```
