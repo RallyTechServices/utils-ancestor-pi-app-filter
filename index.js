@@ -13,6 +13,12 @@ Ext.define('Utils.AncestorPiAppFilter', {
     config: {
         /**
          * @cfg {Boolean}
+         * The id of the component where the plugin will render its controls
+         */
+        renderAreaId: 'utils-ancestor-pi-app-filter',
+
+        /**
+         * @cfg {Boolean}
          * Set to true to indicate that this component is a publisher of events
          * to other apps using this plugin
          */
@@ -35,13 +41,26 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {String}
          * Label of the Portfolio Item Type picker
          */
-        label: 'With Ancestor',
+        ancestorLabel: 'With ancestor',
 
         /**
          * @cfg {Number}
          * Width of the Portfolio Item Type picker label
          */
-        labelWidth: 125,
+        ancestorLabelWidth: 120,
+
+        /**
+         * @cfg {String}
+         * Label of the Portfolio Item Type picker
+         */
+        ownerLabel: 'and owned by',
+
+        /**
+         * @cfg {Number}
+         * Width of the Portfolio Item Type picker label
+         */
+        ownerLabelWidth: 120,
+
 
         /**
          * @cfg {Number}
@@ -98,7 +117,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     init: function(cmp) {
         this.cmp = cmp;
-        this.renderArea = this.cmp.down('#' + Utils.AncestorPiAppFilter.RENDER_AREA_ID);
+        this.renderArea = this.cmp.down('#' + this.renderAreaId);
         var cmpGetSettingsFields = this.cmp.getSettingsFields;
         this.cmp.getSettingsFields = function() {
             return this._getSettingsFields(cmpGetSettingsFields.apply(cmp, arguments));
@@ -225,58 +244,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
     // Requires that app settings are available (e.g. from 'beforelaunch')
     _addControlCmp: function() {
         if (this.renderArea) {
-            /*
-            this.ignoreScopeControl = Ext.create('Rally.ui.CheckboxField', {
-                xtype: 'rallycheckboxfield',
-                id: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
-                name: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
-                hidden: this._isSubscriber(),
-                labelWidth: 140,
-                labelStyle: this.labelStyle,
-                fieldLabel: 'and owned by',
-                listeners: {
-                    scope: this,
-                    change: function(cmp, newValue) {
-                        this._onSelect();
-                    },
-                }
-            });
-            */
-            /*
-            this.ignoreScopeControl = Ext.create('Ext.form.RadioGroup', {
-                id: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
-                name: 'Utils.AncestorPiAppFilter.ignoreProjectScope',
-                hidden: this._isSubscriber(),
-                labelWidth: 140,
-                labelStyle: this.labelStyle,
-                fieldLabel: 'and owned by',
-                listeners: {
-                    scope: this,
-                    change: function(cmp, newValue) {
-                        this._onSelect();
-                    },
-                },
-                allowBlank: false,
-                items: [{
-                    xtype: 'rallyradiofield',
-                    fieldLabel: 'current project(s)',
-                    name: 'ignoreProjectScope',
-                    value: true,
-                    inputValue: false
-                }, {
-                    xtype: 'rallyradiofield',
-                    fieldLabel: 'any project',
-                    name: 'ignoreProjectScope',
-                    value: false,
-                    inputValue: false
-                }]
-            });*/
             this.ignoreScopeControl = Ext.create('Rally.ui.combobox.ComboBox', {
+                hidden: this._isSubscriber(),
                 displayField: 'text',
                 valueField: 'value',
                 labelStyle: this.labelStyle,
-                labelWidth: 140,
-                fieldLabel: 'and owned by',
+                labelWidth: this.ownerLabelWidth,
+                fieldLabel: this.ownerLabel,
                 storeConfig: {
                     fields: ['text', 'value'],
                     data: [{
@@ -299,8 +273,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
                 id: 'Utils.AncestorPiAppFilter.piType',
                 name: 'Utils.AncestorPiAppFilter.piType',
                 hidden: this._isSubscriber(),
-                fieldLabel: this.label,
-                labelWidth: this.labelWidth,
+                fieldLabel: this.ancestorLabel,
+                labelWidth: this.ancestorLabelWidth,
                 labelStyle: this.labelStyle,
                 valueField: 'TypePath',
                 allowNoEntry: false,
