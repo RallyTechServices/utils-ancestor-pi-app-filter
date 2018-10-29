@@ -126,7 +126,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
-        if (this._isAncestorFilterEnabled()) {
+        if (this.publisher || this._isAncestorFilterEnabled()) {
             // Need to get pi types sorted by ordinal lowest to highest for the filter logic to work
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
@@ -144,6 +144,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
     initComponent: function() {
         this.callParent(arguments);
         this.addEvents('ready', 'select');
+    },
+
+    notifySubscribers: function() {
+        var data = this._getValue();
+        _.each(this.changeSubscribers, function(subscriberName) {
+            this.publish(subscriberName, data);
+        }, this);
     },
 
     // Return a proimse that resolves to a filter (or null) after both:
@@ -213,13 +220,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
             result.ignoreProjectScope = this.ignoreScopeControl.getValue();
         }
         return result;
-    },
-
-    notifySubscribers: function() {
-        var data = this._getValue();
-        _.each(this.changeSubscribers, function(subscriberName) {
-            this.publish(subscriberName, data);
-        }, this);
     },
 
     _setReady: function() {
