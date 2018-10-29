@@ -84,7 +84,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                 if (!_.contains(this.changeSubscribers, subscriberName)) {
                     this.changeSubscribers.push(subscriberName)
                 }
-                this.publish(subscriberName, this.getValue());
+                this.publish(subscriberName, this._getValue());
             }, this);
             // Ask any existing subscribers to re-register
             this.publish('reRegisterChangeSubscriber');
@@ -154,7 +154,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
         if (this._isAncestorFilterEnabled()) {
             var modelName = type.toLowerCase();
-            var currentValues = this.getValue();
+            var currentValues = this._getValue();
             if (currentValues.piTypePath) {
                 var selectedPiTypePath = currentValues.piTypePath
                 var selectedRecord = currentValues.isPiSelected;
@@ -186,11 +186,14 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     getIgnoreProjectScope: function() {
-        var currentValue = this.getValue();
-        return currentValue.ignoreProjectScope;
+        var result = false;
+        if (this._isAncestorFilterEnabled()) {
+            result = this._getValue().ignoreProjectScope;
+        }
+        return result;
     },
 
-    getValue: function() {
+    _getValue: function() {
         var result = {};
         if (this._isSubscriber()) {
             result = this.publishedValue;
@@ -213,7 +216,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     notifySubscribers: function() {
-        var data = this.getValue();
+        var data = this._getValue();
         _.each(this.changeSubscribers, function(subscriberName) {
             this.publish(subscriberName, data);
         }, this);
@@ -225,7 +228,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _onSelect: function() {
-        if (this.ready) {
+        if (this.ready && this._isAncestorFilterEnabled()) {
             this.fireEvent('select', this);
         }
     },
