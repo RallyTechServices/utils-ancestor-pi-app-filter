@@ -126,7 +126,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter'] = false;
         this.cmp.setDefaultSettings(appDefaults);
 
-        if (this.publisher || this._isAncestorFilterEnabled()) {
+        if (this._isAncestorFilterEnabled()) {
             // Need to get pi types sorted by ordinal lowest to highest for the filter logic to work
             this.piTypesPromise = Rally.data.util.PortfolioItemHelper.getPortfolioItemTypes().then({
                 scope: this,
@@ -248,6 +248,9 @@ Ext.define('Utils.AncestorPiAppFilter', {
     _addControlCmp: function() {
         if (this.renderArea) {
             this.ignoreScopeControl = Ext.create('Rally.ui.combobox.ComboBox', {
+                stateful: true,
+                stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.ignoreProjectScope'),
+                stateEvents: ['select'],
                 hidden: this._isSubscriber(),
                 displayField: 'text',
                 valueField: 'value',
@@ -275,13 +278,16 @@ Ext.define('Utils.AncestorPiAppFilter', {
                 xtype: 'rallyportfolioitemtypecombobox',
                 id: 'Utils.AncestorPiAppFilter.piType',
                 name: 'Utils.AncestorPiAppFilter.piType',
+                stateful: true,
+                stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piType'),
+                stateEvents: ['select'],
                 hidden: this._isSubscriber(),
                 fieldLabel: this.ancestorLabel,
                 labelWidth: this.ancestorLabelWidth,
                 labelStyle: this.labelStyle,
                 valueField: 'TypePath',
                 allowNoEntry: false,
-                defaultSelectionPosition: 'last',
+                defaultSelectionPosition: 'first',
                 listeners: {
                     scope: this,
                     ready: function(combobox) {
@@ -441,7 +447,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _isAncestorFilterEnabled: function() {
-        return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
+        return this.publisher || this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter');
     },
 
     _isSubscriber: function() {
