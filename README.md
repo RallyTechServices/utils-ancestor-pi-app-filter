@@ -175,3 +175,52 @@ to push the changes and tag to GitHub.
 2. `npm publish --access public` - This will publish the new version to npmjs.org
 3. Create the new release in [`utils_file-utils/releases'](https://github.com/RallyTechServices/utils_file-utils/releases)
 
+## Test Plan
+
+### Settings
+* PASS - Retain values after settings close and reopen
+* PASS - Retain values after app reload
+* PASS - Label width customizable by config.settingsConfig
+* PASS - Show ancestor filter shows/hides ancestor filter
+* PASS - Show ignore scope shows/hides ignore scope
+* NOT IMPLEMENTED - Ignore scope by default provides default value for ignore scope control
+* PASS - Ignore scope by default value used ONLY if ignore scope control not shown
+
+### Controls
+#### Publisher / Subscriber indicator
+* PASS - has mouseover explaining icon
+
+#### PI Type Picker
+* PASS -  pi types
+* PASS - changing types resets pi picker
+* PASS - lowest level selected by default
+* PASS - type remembered after reload
+* PASS - changing type notifies subscribers
+* PASS - unaffected by changes to controls in expanded listener
+
+#### PI Picker
+* PASS - has clear option
+* PASS - has none option
+* PASS - has pis that match currently selected pi type
+* PASS - has pis across entire workspace
+* PASS - pi remembered after reload
+* PASS - changing pi notifies subscribers
+* PASS - unaffected by changes to controls in expanded listener
+
+#### Scope Control
+* PASS - Current Project is default
+* PASS - choice remembered after reload
+* PASS - changing choice notifies subscribers
+* PASS - unaffected by changes to controls in expanded listener
+
+### As Publisher
+* PASS - Shows publisher icon
+
+### As Subscriber
+* PASS - Shows subscriber icon
+* PASS - Hides all controls
+* PASS - Hides all controls even when own app settings show them
+* NOT IMPLEMENTED - Uses publisher settings when expanded
+* PASS - Uses app settings for controls when expanded
+* PASS - Uses publisher filters when not expanded
+* PASS - Automatically becomes subscriber when publisher added to page
