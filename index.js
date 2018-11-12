@@ -53,13 +53,19 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {String}
          * Label of the Portfolio Item Type picker when shown with the ancestor filter
          */
-        ownerLabel: 'Owned by',
+        ownerLabel: 'and owned by',
+
+        /**
+         * @cfg {String}
+         * Label of the Portfolio Item Type picker when shown by itself
+         */
+        ownerOnlyLabel: 'Owned by',
 
         /**
          * @cfg {Number}
          * Width of the Portfolio Item Type picker label
          */
-        ownerLabelWidth: 80,
+        ownerLabelWidth: 110,
 
 
         /**
@@ -72,7 +78,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
          * @cfg {Number}
          * Minimum width for single row layout
          */
-        singleRowMinWidth: 650
+        singleRowMinWidth: 840
     },
 
     portfolioItemTypes: [],
@@ -110,8 +116,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         // Extend app default settings fields
         var appDefaults = this.cmp.defaultSettings;
         appDefaults['Utils.AncestorPiAppFilter.enableAncestorPiFilter2'] = false;
-        appDefaults['Utils.AncestorPiAppFilter.showIgnoreProjectScope2'] = false;
-        appDefaults['Utils.AncestorPiAppFilter.ignoreProjectScope2'] = false;
+        appDefaults['Utils.AncestorPiAppFilter.projectScope'] = 'current';
         this.cmp.setDefaultSettings(appDefaults);
 
         // Add the control components then fire ready
@@ -245,23 +250,40 @@ Ext.define('Utils.AncestorPiAppFilter', {
     },
 
     _getSettingsFields: function(fields) {
-        // TODO (tj) add '2' to the end of settings to workaround old versions of 
-        // this component
+        var currentSettings = Rally.getApp().getSettings();
         var pluginSettingsFields = [{
             xtype: 'rallycheckboxfield',
             id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
             name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
-            fieldLabel: 'Show Ancestor Portfolio Item Filter',
+            fieldLabel: 'Filter artifacts by ancestor portfolio item',
         }, {
-            xtype: 'rallycheckboxfield',
-            id: 'Utils.AncestorPiAppFilter.showIgnoreProjectScope2',
-            name: 'Utils.AncestorPiAppFilter.showIgnoreProjectScope2',
-            fieldLabel: 'Show Ignore Project Scope Control',
-        }, {
-            xtype: 'rallycheckboxfield',
-            id: 'Utils.AncestorPiAppFilter.ignoreProjectScope2',
-            name: 'Utils.AncestorPiAppFilter.ignoreProjectScope2',
-            fieldLabel: 'Ignore Project Scope if scope control not shown',
+            xtype: 'radiogroup',
+            fieldLabel: 'Show artifacts from',
+            columns: 1,
+            vertical: true,
+            allowBlank: false,
+            items: [{
+                boxLabel: "User's current project(s).",
+                name: 'Utils.AncestorPiAppFilter.projectScope',
+                inputValue: 'current',
+                checked: 'current' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+            }, {
+                boxLabel: "All projects in workspace.",
+                name: 'Utils.AncestorPiAppFilter.projectScope',
+                inputValue: 'workspace',
+                checked: 'workspace' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+            }, {
+                boxLabel: 'User selectable (either current project(s) or all projects in workspace).',
+                name: 'Utils.AncestorPiAppFilter.projectScope',
+                inputValue: 'user',
+                checked: 'user' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+            }, ],
+            listeners: {
+                scope: this,
+                change: function(group, newValue) {
+                    return;
+                }
+            }
         }];
         pluginSettingsFields = _.map(pluginSettingsFields, function(pluginSettingsField) {
             return _.merge(pluginSettingsField, this.settingsConfig)
@@ -282,6 +304,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
         if (this.cmp.getWidth() < this.singleRowMinWidth) {
             controlsLayout = 'vbox';
             ownerLabelWidth = this.ancestorLabelWidth;
+        }
+        var scopeControlByItself = false;
+        if (this._showAncestorFilter() == false && this._showIgnoreProjectScopeControl() == true) {
+            scopeControlByItself = true;
         }
         var controls = {
             xtype: 'container',
@@ -310,6 +336,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             }, {
                 xtype: 'container',
                 id: 'filtersArea',
+                flex: 1,
                 layout: controlsLayout,
                 items: [{
                     xtype: 'container',
@@ -330,6 +357,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         {
                             xtype: 'container',
                             id: 'piSelectorArea',
+                            flex: 1,
                             layout: {
                                 type: 'hbox',
                                 align: 'middle',
@@ -356,11 +384,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         valueField: 'value',
                         labelStyle: this.labelStyle,
                         labelWidth: ownerLabelWidth,
-                        fieldLabel: this.ownerLabel,
+                        fieldLabel: scopeControlByItself ? this.ownerOnlyLabel : this.ownerLabel,
                         // Don't set initial value with this component or it will override the state
-                        // For now, don't worry about getting this component to default to the current
-                        // ignoreProjectScope setting.
-                        // value: this.cmp.getSetting('Utils.AncestorPiAppFilter.ignoreProjectScope2'),
                         storeConfig: {
                             fields: ['text', 'value'],
                             data: [{
@@ -513,6 +538,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         var deferred = Ext.create('Deft.Deferred');
         this.piSelector = Ext.create('Rally.ui.combobox.ArtifactSearchComboBox', {
             id: 'Utils.AncestorPiAppFilter.piSelector',
+            width: 250,
             labelAlign: 'top',
             storeConfig: {
                 models: piType,
@@ -568,20 +594,20 @@ Ext.define('Utils.AncestorPiAppFilter', {
         return this.cmp.getSetting('Utils.AncestorPiAppFilter.enableAncestorPiFilter2');
     },
 
+    _showIgnoreProjectScopeControl: function() {
+        return this.cmp.getSetting('Utils.AncestorPiAppFilter.projectScope') == 'user';
+    },
+
     _ignoreProjectScope: function() {
         var result = false;
         if (this._showIgnoreProjectScopeControl()) {
             // If the control is shown, that values overrides the ignoreScope app setting
             result = this.renderArea.down('#ignoreScopeControl').getValue();
         }
-        else {
-            result = this.cmp.getSetting('Utils.AncestorPiAppFilter.ignoreProjectScope2');
+        else if (this.cmp.getSetting('Utils.AncestorPiAppFilter.projectScope') == 'workspace') {
+            result = true;
         }
         return result;
-    },
-
-    _showIgnoreProjectScopeControl: function() {
-        return this.cmp.getSetting('Utils.AncestorPiAppFilter.showIgnoreProjectScope2');
     },
 
     _isSubscriber: function() {
