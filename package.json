@@ -1,6 +1,6 @@
 {
   "name": "@agile-central-technical-services/utils-ancestor-pi-app-filter",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "A portfolio item ancestor filter plugin for Technical Services apps",
   "main": "index.js",
   "scripts": {
