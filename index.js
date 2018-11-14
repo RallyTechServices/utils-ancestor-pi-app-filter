@@ -90,8 +90,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     constructor: function(config) {
         this.callParent(arguments);
-        Ext.tip.QuickTipManager.init(); // TODO (tj) needed?
         this._setupPubSub();
+        Ext.tip.QuickTipManager.init();
     },
 
     initComponent: function() {
@@ -312,6 +312,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         var controls = {
             xtype: 'container',
             id: 'controlsArea',
+            overflowX: 'auto',
             layout: {
                 type: 'hbox',
                 align: 'top'
@@ -319,7 +320,9 @@ Ext.define('Utils.AncestorPiAppFilter', {
             items: [{
                 xtype: 'container',
                 id: 'pubSubIndicatorArea',
+                width: 25,
                 padding: '6 5 0 0',
+                hidden: !this.publisher && !this._isSubscriber(),
                 items: [{
                         xtype: 'component',
                         id: 'publisherIndicator',
@@ -336,7 +339,6 @@ Ext.define('Utils.AncestorPiAppFilter', {
             }, {
                 xtype: 'container',
                 id: 'filtersArea',
-                flex: 1,
                 layout: controlsLayout,
                 items: [{
                     xtype: 'container',
@@ -352,23 +354,21 @@ Ext.define('Utils.AncestorPiAppFilter', {
                                 type: 'hbox',
                                 align: 'middle'
                             },
-                            hidden: this._isSubscriber() || !this._showAncestorFilter()
                         },
                         {
                             xtype: 'container',
                             id: 'piSelectorArea',
-                            flex: 1,
                             layout: {
                                 type: 'hbox',
                                 align: 'middle',
                                 padding: '0 0 0 5'
                             },
-                            hidden: this._isSubscriber() || !this._showAncestorFilter()
                         }
                     ]
                 }, {
                     xtype: 'container',
                     id: 'scopeControlArea',
+                    width: 250,
                     layout: {
                         type: 'hbox',
                         align: 'middle'
@@ -408,6 +408,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
         }
 
         if (this.renderArea) {
+            // Without this, the components are clipped on narrow windows
+            this.renderArea.setOverflowXY('auto', 'auto');
             this.renderArea.add(controls);
         }
 
@@ -419,12 +421,13 @@ Ext.define('Utils.AncestorPiAppFilter', {
             success: function(data) {
                 this.portfolioItemTypes = data;
 
-                if (this._showAncestorFilter()) {
+                if (!this._isSubscriber() && this._showAncestorFilter()) {
                     // Now create the pi type selector
                     this.piTypeSelector = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', {
                         xtype: 'rallyportfolioitemtypecombobox',
                         id: 'Utils.AncestorPiAppFilter.piType',
                         name: 'Utils.AncestorPiAppFilter.piType',
+                        width: 250,
                         stateful: true,
                         stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piType'),
                         stateEvents: ['select'],
@@ -497,25 +500,27 @@ Ext.define('Utils.AncestorPiAppFilter', {
             }
         }
         var filtersArea = this.renderArea.down('#filtersArea');
-        var controlsArea = this.renderArea.down('#controlsArea');
-        var filters = filtersArea.removeAll(false);
-        var newFiltersArea = {
-            xtype: 'container',
-            id: 'filtersArea',
-            layout: controlsLayout,
-            items: filters
+        if (filtersArea) {
+            var controlsArea = this.renderArea.down('#controlsArea');
+            var filters = filtersArea.removeAll(false);
+            var newFiltersArea = {
+                xtype: 'container',
+                id: 'filtersArea',
+                layout: controlsLayout,
+                items: filters,
+                hidden: filtersArea.isHidden()
+            }
+            controlsArea.remove(filtersArea, false);
+            controlsArea.add(newFiltersArea);
         }
-        controlsArea.remove(filtersArea, false);
-        controlsArea.add(newFiltersArea);
     },
 
     _hideControlCmp: function() {
-        if (this.subscriberIndicator && this._isSubscriber()) {
-            this.subscriberIndicator.show()
+        if (this.renderArea) {
+            this.renderArea.down('#pubSubIndicatorArea').show();
+            this.renderArea.down('#subscriberIndicator').show();
+            this.renderArea.down('#filtersArea').hide();
         }
-        this.renderArea.down('#piTypeArea').hide();
-        this.renderArea.down('#piSelectorArea').hide();
-        this.renderArea.down('#ignoreScopeControl').hide();
     },
 
     _onPiTypeChange: function(piTypeSelector, newValue, oldValue) {
