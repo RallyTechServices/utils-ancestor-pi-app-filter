@@ -627,7 +627,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
         else if (typeName === 'defect') {
             property = 'Requirement.' + piTypesAbove[0].get('Name');
         }
-        else if (typeName.startsWith('portfolioitem')) {
+        else if (Ext.String.startsWith(typeName, 'portfolioitem')) {
             property = 'Parent';
         }
 
@@ -659,7 +659,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
             });
             result = this.portfolioItemTypes.slice(0, selectedPiTypeIndex + 1);
         }
-        else if (modelName.startsWith('portfolioitem')) {
+        else if (Ext.String.startsWith(modelName, 'portfolioitem')) {
             modelNamePiTypeIndex = _.findIndex(this.portfolioItemTypes, function(piType) {
                 return piType.get('TypePath').toLowerCase() === modelName.toLowerCase();
             });
