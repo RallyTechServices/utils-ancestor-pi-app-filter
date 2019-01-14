@@ -251,40 +251,55 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     _getSettingsFields: function(fields) {
         var currentSettings = Rally.getApp().getSettings();
+        if (!currentSettings.hasOwnProperty('Utils.AncestorPiAppFilter.projectScope')) {
+            currentSettings['Utils.AncestorPiAppFilter.projectScope'] = 'user'
+        }
         var pluginSettingsFields = [{
-            xtype: 'rallycheckboxfield',
-            id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
-            name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
-            fieldLabel: 'Filter artifacts by ancestor portfolio item',
-        }, {
-            xtype: 'radiogroup',
-            fieldLabel: 'Show artifacts from',
-            columns: 1,
-            vertical: true,
-            allowBlank: false,
-            items: [{
-                boxLabel: "User's current project(s).",
-                name: 'Utils.AncestorPiAppFilter.projectScope',
-                inputValue: 'current',
-                checked: 'current' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+                xtype: 'rallycheckboxfield',
+                id: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
+                name: 'Utils.AncestorPiAppFilter.enableAncestorPiFilter2',
+                fieldLabel: 'Filter artifacts by ancestor portfolio item',
             }, {
-                boxLabel: "All projects in workspace.",
-                name: 'Utils.AncestorPiAppFilter.projectScope',
-                inputValue: 'workspace',
-                checked: 'workspace' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
-            }, {
-                boxLabel: 'User selectable (either current project(s) or all projects in workspace).',
-                name: 'Utils.AncestorPiAppFilter.projectScope',
-                inputValue: 'user',
-                checked: 'user' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
-            }, ],
-            listeners: {
-                scope: this,
-                change: function(group, newValue) {
-                    return;
+                xtype: 'rallyportfolioitemtypecombobox',
+                id: 'Utils.AncestorPiAppFilter.defaultPiType',
+                name: 'Utils.AncestorPiAppFilter.defaultPiType',
+                fieldLabel: "Default Portfolio Item type",
+                valueField: 'TypePath',
+                allowNoEntry: false,
+                defaultSelectionPosition: 'last',
+                // Disable the preference enabled combo box plugin so that this control value is app specific
+                plugins: [],
+            },
+            {
+                xtype: 'radiogroup',
+                fieldLabel: 'Show artifacts from',
+                columns: 1,
+                vertical: true,
+                allowBlank: false,
+                items: [{
+                    boxLabel: "User's current project(s).",
+                    name: 'Utils.AncestorPiAppFilter.projectScope',
+                    inputValue: 'current',
+                    checked: 'current' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+                }, {
+                    boxLabel: "All projects in workspace.",
+                    name: 'Utils.AncestorPiAppFilter.projectScope',
+                    inputValue: 'workspace',
+                    checked: 'workspace' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+                }, {
+                    boxLabel: 'User selectable (either current project(s) or all projects in workspace).',
+                    name: 'Utils.AncestorPiAppFilter.projectScope',
+                    inputValue: 'user',
+                    checked: 'user' === currentSettings['Utils.AncestorPiAppFilter.projectScope']
+                }, ],
+                listeners: {
+                    scope: this,
+                    change: function(group, newValue) {
+                        return;
+                    }
                 }
             }
-        }];
+        ];
         pluginSettingsFields = _.map(pluginSettingsFields, function(pluginSettingsField) {
             return _.merge(pluginSettingsField, this.settingsConfig)
         }, this);
@@ -428,6 +443,8 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         id: 'Utils.AncestorPiAppFilter.piType',
                         name: 'Utils.AncestorPiAppFilter.piType',
                         width: 250,
+                        // Disable the preference enabled combo box plugin so that this control value is app specific
+                        plugins: [],
                         stateful: true,
                         stateId: this.cmp.getContext().getScopedStateId('Utils.AncestorPiAppFilter.piType'),
                         stateEvents: ['select'],
@@ -435,6 +452,7 @@ Ext.define('Utils.AncestorPiAppFilter', {
                         labelWidth: this.ancestorLabelWidth,
                         labelStyle: this.labelStyle,
                         valueField: 'TypePath',
+                        value: this._defaultPortfolioItemType(),
                         allowNoEntry: false,
                         defaultSelectionPosition: 'first',
                         listeners: {
@@ -617,6 +635,10 @@ Ext.define('Utils.AncestorPiAppFilter', {
 
     _isSubscriber: function() {
         return this.isSubscriber;
+    },
+
+    _defaultPortfolioItemType: function() {
+        return this.cmp.getSetting('Utils.AncestorPiAppFilter.defaultPiType');
     },
 
     _propertyPrefix: function(typeName, piTypesAbove) {
